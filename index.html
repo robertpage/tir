@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+</head>
+<body>
+<svg style="width: 100%;max-height: 600px; background:#000822" width="5000px" height="5000px" viewBox="2000 2000 500 500" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <style>
+    #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}
+  </style>
+    <rect fill="#000822" x="0" y="0" width="5000" height="5000"></rect>
+    <g id="b" style="opacity: 1"></g>
+      <polygon style="transform:translate(1825px, 2005px)" id="m" fill="#484850" points="0 5.4 5.5 5.4 11 0 11 18 5.5 12.6 0 12.6"></polygon>
+      <g id="s">
+          <g stroke="#979797">
+            <circle fill="#D8D8D8" cx="26.5" cy="6.5" r="6"></circle>
+            <line x1="26.5" y1="13.5" x2="26.5" y2="26.5"></line>
+            <line x1="26.5" y1="0.5" x2="0.5" y2="35.5"></line>
+            <line x1="26.5" y1="0.5" x2="52.5" y2="35.5"></line>
+          </g>
+          <circle style="transform:translate(-100px, -100px)" id="r" fill="#C9EDFF" cx="125.5" cy="125.5" r="125.5"></circle>
+      </g>
+      <text style="transform:translate(2225px, 2225px)" x="-350" y="250" fill="#fff" font-family="Arial, sans-serif" id="t">Earth became dark. Scan for life, keep us alive in the minds of others. (Arrow keys to move/scan objects)</text>
+</svg>
+
+<script>
+let svg = document.querySelector("svg");
+let ship = svg.querySelector("#s");
+let radar = svg.querySelector("#r");
+let objects = svg.querySelector("#b");
+let soundButton = svg.querySelector("#m");
+let text = svg.querySelector("text");
+let degrees = 0;
+let velocityX = 0;
+let velocityY = 0;
+let positionX = 2225;
+let positionY = 2225;
+let map = [];
+let sector = [500, 500]
+
+let general = [
+  {
+    t: "None. Planet. No intelligent life.",
+    s: rand(200, 500),
+    h: getColor('f')
+  },
+  {
+    p: "168.445312 70.609375 0.140625 190.21875 64.5546875 249.554687 217.242187 287.96875 267.320312 202.179687 379.273437 144.320312 247.25 0.3984375 136.1875 23.15625",
+    t: "None. Asteroid. No intelligent life.",
+    s: rand(50, 100),
+    h: getColor('ff00')
+  },
+  {
+    p: "31.765625 185.992188 0.6015625 217.789062 0.6015625 245.039062 31.765625 270.3125 62.859375 270.3125 94.671875 228.152344 225.0625 -0.0703125",
+    t: "None. Comet. No intelligent life.",
+    s: rand(50, 100),
+    h: getColor('00bd')
+  },
+  {
+    t: "None. Gas Giant. No intelligent life.",
+    s: rand(400, 700),
+    h: getColor('f')
+  },
+  {
+    t: "None. Star. No intelligent life.",
+    s: rand(800, 1000),
+    c: [2000, 2000],
+    h: getColor('fffd')
+  },
+]
+
+let specials = [
+  {
+    p: "M588.101563,0.7734375 L0.4140625,227.507813 C428.669271,215.486979 631.809896,209.476563 609.835938,209.476563 C587.861979,209.476563 475.9375,139.908854 274.0625,0.7734375 L200.757813,335 L505.007813,83.484375 L133.984375,83.484375 L505.007813,302.859375 L588.101563,0.7734375 Z",
+    t: "Alien. Artifacts. Ancient. Debris. Alone.",
+    s: rand(20, 100),
+    h: getColor('00a7')
+  },
+  {
+    P: "0.46875 72.4140625 383.25 0.28125 307.546875 172.695312",
+    t: "Planet. Alien. Ancient. Civilization. Debris. Alone.",
+    s: rand(200, 500),
+    h: getColor('00bd')
+  },
+  {
+    p: "241.34375 59.71875 -0.1015625 119.460938 212.976562 136.921875 212.976562 191.398437 271.257812 159.421875 430.695312 259.9375 347.992188 75.640625 337.304688 0.4921875",
+    t: "Ship. Ancient. Debris. Alone.",
+    s: rand(20, 100),
+    h: getColor('00a7')
+  },
+  {
+    h:"rect", // ellipse
+    t: "Whale. Moos. Friend.",
+    s: rand(20, 100),
+    h: getColor('00bd')
+  },
+  {
+    t: "Probe. Sister. Debris. Alone.",
+    s: 12,
+    h: getColor('D8D8D8') //"#D8D8D8"
+  },
+  {
+    t: "We are ancient. Your loss is deep. Not all proceed. We are friend. Journey on.",
+    s: rand(200, 500),
+    h: getColor('000000')
+  },
+  {
+    t: "",
+    s: rand(200, 500),
+    h: getColor('56ccff'),
+    w:'t'
+  }
+]
+
+let soundIndex = 0;
+const music = [
+    ['587.3', 'triangle'],
+    1,
+    1,
+    ['311.1'],
+    ['164.8'],
+    ['311.1'],
+    1,
+    ['1661', 'square', 0.01],
+  ];
+
+let setDirection = {
+  '0':[0, -2],
+  '30':[1, -2],
+  '60':[2, -1],
+  '90':[2, 0],
+  '120':[2, 1],
+  '150':[1, 1],
+  '180':[0, 2],
+  '210':[-1, 2],
+  '240':[-1, 1],
+  '270':[-2, 0],
+  '300':[-1, -1],
+  '330':[-1, -2],
+}
+let context = new AudioContext()
+let o = null
+let g = null
+let tickCount = 0;
+let soundEnabled = false;
+
+let interval;
+
+init();
+function init () {
+  soundButton.addEventListener('click', ()=>{soundEnabled = !soundEnabled}, false);
+  document.addEventListener('keydown', keyHandling, false);
+  genMaps();
+  move;
+  layoutStars();
+  layoutBodies();
+  interval = setInterval(tick, 10);
+}
+
+function tick () {
+  move();
+  if (soundEnabled && tickCount % 30 === 0) {
+    if (music[soundIndex] !== 1) sound(music[soundIndex][0], music[soundIndex][1] || undefined, music[soundIndex][2] || undefined);
+    soundIndex++;
+  }
+  if (!music[soundIndex]) soundIndex = 0;
+  tickCount++;
+}
+
+function keyHandling (e) {
+  let callback = {
+      'ArrowLeft':()=>{degrees -= 30},
+      'ArrowRight':()=>{degrees += 30},
+      'ArrowUp':()=>{
+        let str = degrees+"";
+        velocityX = setDirection[str][0];
+        velocityY = setDirection[str][1];
+      },
+      'ArrowDown':scan,
+  }[e.key];
+  callback && callback();
+}
+
+function move () {
+  if (degrees === 360) degrees = 0;
+  if (degrees < 0) degrees = 360 + degrees;
+
+  if (positionX + velocityX > 5000) {
+    sector[1] += 1;
+    layoutBodies();
+    text.textContent = '';
+    positionX = 0;
+  }
+  if (positionX + velocityX < 0) {
+    sector[1] -= 1;
+    layoutBodies();
+    text.textContent = '';
+    positionX = 5000;
+  }
+  if (positionY + velocityY > 5000) {
+    sector[0] -= 1;
+    layoutBodies();
+    text.textContent = '';
+    positionY = 0;
+  }
+  if (positionY + velocityY < 0) {
+    sector[0] += 1;
+    layoutBodies();
+    text.textContent = '';
+    positionY = 5000;
+  }
+
+  positionX += velocityX;
+  positionY += velocityY;
+  ship.style.transform = 'translate('+positionX+'px, '+positionY+'px) rotate('+degrees+'deg)';
+  soundButton.style.transform = 'translate('+(positionX - 400)+'px, '+(positionY - 220)+'px)';
+  svg.setAttribute('viewBox', (positionX-225)+' '+(positionY-225)+' 500 500')
+}
+
+function layoutStars () {
+  for (let i = 0; i < 1000; i++) {
+    let circle = addElement(2);
+    circle.style.transform = 'translate('+Math.random()*5000+'px, '+Math.random()*5000+'px)'
+  }
+}
+
+function layoutBodies () {
+  let bodies = objects.querySelectorAll(".c");
+  for (let k = 0; k < bodies.length; k++) {
+    if (bodies[k]) bodies[k].remove();
+  }
+
+  if (!map[sector[0]] || !map[sector[0]][sector[1]]) {
+    win();
+    return;
+  }
+  let sec = map[sector[0]][sector[1]];
+  if (sec.length > 0) {
+    for (let j = 0; j < sec.length; j++) {
+      let node = addElement(Math.floor(sec[j].s), sec[j].h, sec[j].p || undefined);
+      node.classList.add("c");
+      if (!sec[j].c) {
+        sec[j].c = [];
+        sec[j].c[0] = rand(0, 5000);
+        sec[j].c[1] = rand(0, 5000);
+      }
+      node.style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)'
+    }
+  }
+}
+
+function scan () {
+  if (soundEnabled) sound(261.6, 'sine', 0.1);
+  radar.style.opacity = 0.8;
+  setTimeout(()=>{radar.style.opacity = 0;}, 400)
+  velocityX = 0;
+  velocityY = 0;
+  let sec = map[sector[0]][sector[1]];
+  text.textContent = "Tir: Hello?";
+  text.style.transform = 'translate('+positionX+'px, '+positionY+'px)';
+  for (let i = 0; i < sec.length; i++) {
+    if (Math.abs(positionX - (sec[i].c[1]+sec[i].s)) < 300 &&
+    Math.abs(positionY - (sec[i].c[0]+sec[i].s)) < 300) {
+      if (sec[i].w) {
+        win();
+        break;
+      }
+      text.textContent = "Tir: Hello? Response: "+ sec[i].t;
+      break;
+    }
+  }
+}
+
+function addElement (size, color, points) {
+  let newElement = document.createElementNS("http://www.w3.org/2000/svg", points ? "polygon" : "circle");
+  if (points) {
+    newElement.setAttribute("points",points);
+  } else {
+    newElement.setAttribute("cx",size);
+    newElement.setAttribute("cy",size);
+    newElement.setAttribute("r",size/2);
+  }
+  newElement.setAttribute("fill",color || '#fff');
+  objects.appendChild(newElement);
+  return newElement;
+}
+
+function genMaps () {
+  for (let i = 0; i < 1000; i++) {
+    map.push([]);
+    for (let j = 0; j < 1000; j++) {
+      let tmp = [];
+      if (i === 500 && j === 500) {
+        let startPlanet = {...general[0]};
+        startPlanet.s = 200;
+        startPlanet.c = [2100, 2225];
+        startPlanet.h = "#18cef1";
+        tmp.push(startPlanet);
+      } else {
+        if (Math.random() > 0.5) tmp.push(generatePlanet());
+        if (Math.random() > 0.5) tmp.push(generatePlanet());
+        if (Math.random() > 0.5) tmp.push(generatePlanet());
+        if (Math.random() > 0.95) tmp.push(generateSpecial());
+      }
+
+      map[i].push(tmp);
+    }
+  }
+}
+
+function generatePlanet () {
+  return {...general[Math.floor(Math.random() * general.length)]};
+}
+
+function generateSpecial () {
+  return {...specials[Math.floor(Math.random() * specials.length)]};
+}
+
+function getColor (i) {
+  let color = (Math.random()*100000000).toString(16);
+  return '#'+i+color.substring(0, 6 - i.length)
+}
+
+function rand (min, multiplier) {
+  let num = Math.floor(Math.random()* multiplier);
+  return num < min ? min : num;
+}
+
+function soundP (frequency, type, length){
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      sound(frequency, type, length)
+      resolve();
+    }, length*10000);
+  });
+}
+
+function sound(frequency, type, gain, length) {
+  o = context.createOscillator()
+  g = context.createGain()
+  g.gain.value = gain || 0.05 // 10 %
+  o.type = type || 'triangle'
+  o.connect(g)
+  o.frequency.value = frequency
+  g.connect(context.destination)
+  o.start(0)
+
+  g.gain.exponentialRampToValueAtTime(
+    0.00001, context.currentTime + (length || 2)
+  )
+}
+
+function win () {
+  clearInterval(interval);
+  text.textContent = "";
+  objects.style.opacity = 0;
+  text.style.opacity = 0;
+  text.classList.add('e');
+  let lowerText = text.cloneNode(true);
+  let lowestText = text.cloneNode(true);
+  svg.appendChild(lowerText);
+  svg.appendChild(lowestText);
+  setTimeout(end, 4000);
+
+  function end () {
+    let texts = svg.querySelectorAll(".e");
+    let endText = [
+      "You are probe. Welcome home. We sent you out when all hope had escaped us. ",
+      "You were to tell others of our story, so not all was lost. You have done well. ",
+      "Speak your journey. Come, rest our friend. Together"
+    ]
+    for (let i = 0; i < texts.length; i++) {
+      texts[i].style.transform = 'translate('+positionX+'px, '+(positionY - ((3 - i)*50))+'px)';
+      texts[i].textContent = endText[i];
+      texts[i].style.opacity = 0;
+      setTimeout(() => {
+        texts[i].style.opacity = 1;
+      }, i*3000);
+    }
+  }
+}
+
+</script>
+</body>
+</html>
