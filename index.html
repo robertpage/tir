@@ -8,6 +8,11 @@
   <style>
     #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}
   </style>
+  <defs>
+    <filter id="f" x="0" y="0">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="40" />
+    </filter>
+  </defs>
     <rect fill="#000822" x="0" y="0" width="5000" height="5000"></rect>
     <g id="b" style="opacity: 1"></g>
       <polygon style="transform:translate(1825px, 2005px)" id="m" fill="#484850" points="0 5.4 5.5 5.4 11 0 11 18 5.5 12.6 0 12.6"></polygon>
@@ -43,32 +48,38 @@ let longRangeScanners;
 
 let general = [
   {
-    t: "None. Planet. No intelligent life.",
+    t: "None. Planet $. No intelligent life.",
     s: rand(200, 500),
-    h: getColor('f')
+    h: getColor('f'),
+    n: "n"
   },
   {
     p: "168.445312 70.609375 0.140625 190.21875 64.5546875 249.554687 217.242187 287.96875 267.320312 202.179687 379.273437 144.320312 247.25 0.3984375 136.1875 23.15625",
-    t: "None. Asteroid. No intelligent life.",
-    s: rand(50, 100),
-    h: getColor('ff00')
+    t: "None. Asteroid $. No intelligent life.",
+    s: rand(20, 200),
+    h: getColor('808080'),
+    n: "n",
+    m: "a",
   },
   {
     p: "31.765625 185.992188 0.6015625 217.789062 0.6015625 245.039062 31.765625 270.3125 62.859375 270.3125 94.671875 228.152344 225.0625 -0.0703125",
-    t: "None. Comet. No intelligent life.",
+    t: "None. Comet $. No intelligent life.",
     s: rand(50, 100),
-    h: getColor('00bd')
+    h: getColor('00bd'),
+    n: "n"
   },
   {
-    t: "None. Gas Giant. No intelligent life.",
+    t: "None. Gas Giant $. No intelligent life.",
     s: rand(400, 700),
-    h: getColor('f')
+    h: getColor('f'),
+    n: "n"
   },
   {
-    t: "None. Star. No intelligent life.",
+    t: "None. Star $. No intelligent life.",
     s: rand(800, 1000),
     c: [2000, 2000],
-    h: getColor('fffd')
+    h: getColor('fffd'),
+    n: "n"
   },
 ]
 
@@ -106,7 +117,7 @@ let specials = [
     h: getColor('D8D8D8')
   },
   {
-    t: "We are ancient. Your loss is deep. Not all proceed. We are friend. Journey on. Incoperate tech. ('W', 'S' keys)",
+    t: "We are ancient. We are friend. Journey on. Incoperate tech. ('W', 'S' keys)",
     s: rand(200, 500),
     h: getColor('000000'),
     u: "a"
@@ -121,6 +132,11 @@ let specials = [
 
 let soundIndex = 0;
 const music = [
+    ['311.1'],
+    ['164.8'],
+    ['311.1'],
+    1,
+    ['1661', 'square', 0.01],
     ['587.3', 'triangle'],
     1,
     1,
@@ -129,6 +145,7 @@ const music = [
     ['311.1'],
     1,
     ['1661', 'square', 0.01],
+    ['587.3', 'triangle'],
   ];
 
 let setDirection = {
@@ -151,6 +168,7 @@ let o = null
 let g = null
 let tickCount = 0;
 let soundEnabled = false;
+let playTone;
 
 let interval;
 
@@ -168,10 +186,10 @@ function init () {
 function tick () {
   move();
   if (soundEnabled && tickCount % 30 === 0) {
-    if (music[soundIndex] !== 1) sound(music[soundIndex][0], music[soundIndex][1] || undefined, music[soundIndex][2] || undefined);
+    if (playTone && music[soundIndex] !== 1) sound(music[soundIndex][0], music[soundIndex][1] || undefined, music[soundIndex][2] || undefined);
     soundIndex++;
+    if (!music[soundIndex]) {playTone = false; soundIndex = 0};
   }
-  if (!music[soundIndex]) soundIndex = 0;
   tickCount++;
 }
 
@@ -272,8 +290,27 @@ function layoutBodies () {
         sec[j].c[0] = rand(0, 5000);
         sec[j].c[1] = rand(0, 5000);
       }
+      if (sec[j].n) sec[j].n = (sec[j].c[0] + sec[j].h + sec[j].c[1]).replace("#", "-");
       node.style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)'
+      if (sec[j].m) {
+        multipleObjects(node, sec[j]);
+        return;
+      }
     }
+  }
+}
+
+function multipleObjects (node, obj) {
+  let num = rand(1, 10);
+  if (num > 10) num = 10;
+  for (let i = 0; i < num; i++) {
+    let value = Math.random() * 0xFF | 0;
+    let grayscale = (value << 16) | (value << 8) | value;
+    let color = '#' + grayscale.toString(16);
+    let tmpNode = node.cloneNode(true);
+    tmpNode.style.transform = 'translate('+(obj.c[1] +(Math.random()*500))+'px, '+(obj.c[0]+(Math.random()*600))+'px) scale('+Math.random()+') rotate('+(Math.random()*360)+'deg)';
+    tmpNode.style.fill = '#' + grayscale.toString(16);
+    objects.appendChild(tmpNode);
   }
 }
 
@@ -289,6 +326,7 @@ function scan () {
   for (let i = 0; i < sec.length; i++) {
     if (Math.abs(positionX - (sec[i].c[1]+sec[i].s)) < 300 &&
     Math.abs(positionY - (sec[i].c[0]+sec[i].s)) < 300) {
+      playTone = true;
       if (sec[i].w) {
         win();
         break;
@@ -303,7 +341,9 @@ function scan () {
           gravityDrive = true;
         }
       }
-      text.textContent = "Tir: Hello? Response: "+ sec[i].t;
+      let responseText = sec[i].t;
+      if (sec[i].n) responseText = responseText.replace('$', sec[i].n)
+      text.textContent = "Tir: Hello? Response: "+ responseText;
       break;
     }
   }
@@ -333,12 +373,11 @@ function genMaps () {
         startPlanet.s = 200;
         startPlanet.c = [2100, 2225];
         startPlanet.h = "#18cef1";
-        startPlanet.u = "a";
         tmp.push(startPlanet);
       } else {
-        if (Math.random() > 0.5) tmp.push(generatePlanet());
-        if (Math.random() > 0.5) tmp.push(generatePlanet());
-        if (Math.random() > 0.5) tmp.push(generatePlanet());
+        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
+        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
+        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
         if (Math.random() > 0.95) tmp.push(generateSpecial());
       }
 
@@ -347,7 +386,7 @@ function genMaps () {
   }
 }
 
-function generatePlanet () {
+function generateSpaceObject () {
   return {...general[Math.floor(Math.random() * general.length)]};
 }
 
@@ -363,15 +402,6 @@ function getColor (i) {
 function rand (min, multiplier) {
   let num = Math.floor(Math.random()* multiplier);
   return num < min ? min : num;
-}
-
-function soundP (frequency, type, length){
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      sound(frequency, type, length)
-      resolve();
-    }, length*10000);
-  });
 }
 
 function sound(frequency, type, gain, length) {
