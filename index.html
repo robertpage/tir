@@ -65,7 +65,7 @@ let general = [
     p: "31.765625 185.992188 0.6015625 217.789062 0.6015625 245.039062 31.765625 270.3125 62.859375 270.3125 94.671875 228.152344 225.0625 -0.0703125",
     t: "None. Comet $. No intelligent life.",
     s: rand(50, 100),
-    h: getColor('00bd'),
+    h: getColor('897eff'),
     n: "n"
   },
   {
@@ -213,8 +213,10 @@ function keyHandling (e) {
       's':()=>{longRangeScanners ? longRangeScanners === 't' ? longRangeScanners = 'f' : longRangeScanners = 't' : null},
       'w':()=>{
         if (!ftl) return;
-        sector[0] = rand(0, 1000),
-        sector[1] = rand(0, 1000),
+        sector[0] = rand(0, 1000);
+        sector[1] = rand(0, 1000);
+        positionX = rand(10, 4500);
+        positionY = rand(10, 4500);
         layoutBodies();
         text.textContent = '';
       }
@@ -290,7 +292,7 @@ function layoutBodies () {
         sec[j].c[0] = rand(0, 5000);
         sec[j].c[1] = rand(0, 5000);
       }
-      if (sec[j].n) sec[j].n = (sec[j].c[0] + sec[j].h + sec[j].c[1]).replace("#", "-");
+      if (sec[j].n) sec[j].n = (sector[1] +""+ sec[j].c[1] +""+ sector[0]) + sec[j].h.replace("#", "-");
       node.style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)'
       if (sec[j].m) {
         multipleObjects(node, sec[j]);
