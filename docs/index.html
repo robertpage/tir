@@ -330,7 +330,7 @@ function scan () {
     Math.abs(positionY - (sec[i].c[0]+sec[i].s)) < 300) {
       playTone = true;
       if (sec[i].w) {
-        win();
+        win('w');
         break;
       }
       if (sec[i].u) {
@@ -421,7 +421,7 @@ function sound(frequency, type, gain, length) {
   )
 }
 
-function win () {
+function win (type) {
   clearInterval(interval);
   text.textContent = "";
   objects.style.opacity = 0;
@@ -438,11 +438,16 @@ function win () {
     let endText = [
       "You are probe. Welcome home. We sent you out when all hope had escaped us. ",
       "You were to tell others of our story, so not all was lost. You have done well. ",
-      "Speak your journey. Come, rest our friend. Together"
+      "Speak your journey. Come, rest our friend. Together."
+    ];
+    let endText2 = [
+      "We have watched you for millennia. You are a testiment to your creators. ",
+      "Few have built anything that traveled beyond this galaxies wall. Come rest. ",
+      "You have done well. We will honor you and your journey. Together."
     ]
     for (let i = 0; i < texts.length; i++) {
       texts[i].style.transform = 'translate('+positionX+'px, '+(positionY - ((3 - i)*50))+'px)';
-      texts[i].textContent = endText[i];
+      texts[i].textContent = type === 'w' ? endText[i] : endText2[i];
       texts[i].style.opacity = 0;
       setTimeout(() => {
         texts[i].style.opacity = 1;
