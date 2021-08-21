@@ -29,6 +29,221 @@
 </svg>
 
 <script>
+(function( global ) {
+
+/*
+ * Private stuffz
+ */
+
+var enharmonics = 'B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb',
+  middleC = 440 * Math.pow( Math.pow( 2, 1 / 12 ), -9 ),
+  numeric = /^[0-9.]+$/,
+  octaveOffset = 4,
+  space = /\s+/,
+  num = /(\d+)/,
+  offsets = {};
+
+// populate the offset lookup (note distance from C, in semitones)
+enharmonics.split('|').forEach(function( val, i ) {
+  val.split('-').forEach(function( note ) {
+    offsets[ note ] = i;
+  });
+});
+
+/*
+ * Note class
+ *
+ * new Note ('A4 q') === 440Hz, quarter note
+ * new Note ('- e') === 0Hz (basically a rest), eigth note
+ * new Note ('A4 es') === 440Hz, dotted eighth note (eighth + sixteenth)
+ * new Note ('A4 0.0125') === 440Hz, 32nd note (or any arbitrary
+ * divisor/multiple of 1 beat)
+ *
+ */
+
+// create a new Note instance from a string
+function Note( str ) {
+  var couple = str.split( space );
+  // frequency, in Hz
+  this.frequency = Note.getFrequency( couple[ 0 ] ) || 0;
+  // duration, as a ratio of 1 beat (quarter note = 1, half note = 0.5, etc.)
+  this.duration = Note.getDuration( couple[ 1 ] ) || 0;
+}
+
+// convert a note name (e.g. 'A4') to a frequency (e.g. 440.00)
+Note.getFrequency = function( name ) {
+  var couple = name.split( num ),
+    distance = offsets[ couple[ 0 ] ],
+    octaveDiff = ( couple[ 1 ] || octaveOffset ) - octaveOffset,
+    freq = middleC * Math.pow( Math.pow( 2, 1 / 12 ), distance );
+  return freq * Math.pow( 2, octaveDiff );
+};
+
+// convert a duration string (e.g. 'q') to a number (e.g. 1)
+// also accepts numeric strings (e.g '0.125')
+// and compund durations (e.g. 'es' for dotted-eight or eighth plus sixteenth)
+Note.getDuration = function( symbol ) {
+  return numeric.test( symbol ) ? parseFloat( symbol ) :
+    symbol.toLowerCase().split('').reduce(function( prev, curr ) {
+      return prev + ( curr === 'w' ? 4 : curr === 'h' ? 2 :
+        curr === 'q' ? 1 : curr === 'e' ? 0.5 :
+        curr === 's' ? 0.25 : 0 );
+    }, 0 );
+};
+
+typeof module !== 'undefined' && ( module.exports = Note );
+
+/*
+ * Sequence class
+ */
+
+// create a new Sequence
+function Sequence( ac, tempo, arr ) {
+  if ( ac ) {
+    this.ac = ac;
+    this.createFxNodes();
+    this.tempo = tempo || 120;
+    this.loop = true;
+    this.smoothing = 0;
+    this.staccato = 0;
+    this.notes = [];
+    this.push.apply( this, arr || [] );
+  }
+}
+
+// create gain and EQ nodes, then connect 'em
+Sequence.prototype.createFxNodes = function() {
+  var eq = [ [ 'bass', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
+    prev = this.gain = this.ac.createGain();
+  this.wet = this.ac.createGain();
+  this.dry = this.ac.createGain();
+  eq.forEach(function( config, filter ) {
+    filter = this[ config[ 0 ] ] = this.ac.createBiquadFilter();
+    filter.type = 'peaking';
+    filter.frequency.value = config[ 1 ];
+    prev.connect( prev = filter );
+  }.bind( this ));
+  prev.connect( this.wet );
+  prev.connect( this.dry );
+  return this;
+};
+
+// accepts Note instances or strings (e.g. 'A4 e')
+Sequence.prototype.push = function() {
+  Array.prototype.forEach.call( arguments, function( note ) {
+    this.notes.push( note instanceof Note ? note : new Note( note ) );
+  }.bind( this ));
+  return this;
+};
+
+// recreate the oscillator node (happens on every play)
+Sequence.prototype.createOscillator = function() {
+  this.stop();
+  this.osc = this.ac.createOscillator();
+  this.osc.type = this.waveType || 'square';
+  this.osc.connect( this.gain );
+  return this;
+};
+
+// schedules this.notes[ index ] to play at the given time
+// returns an AudioContext timestamp of when the note will *end*
+Sequence.prototype.scheduleNote = function( index, when ) {
+  var duration = 60 / this.tempo * this.notes[ index ].duration,
+    cutoff = duration * ( 1 - ( this.staccato || 0.00000000001 ) );
+
+  this.setFrequency( this.notes[ index ].frequency, when );
+
+  if ( this.smoothing && this.notes[ index ].frequency ) {
+    this.slide( index, when, cutoff );
+  }
+
+  this.setFrequency( 0, when + cutoff );
+  return when + duration;
+};
+
+// get the next note
+Sequence.prototype.getNextNote = function( index ) {
+  return this.notes[ index < this.notes.length - 1 ? index + 1 : 0 ];
+};
+
+// how long do we wait before beginning the slide? (in seconds)
+Sequence.prototype.getSlideStartDelay = function( duration ) {
+  return duration - Math.min( duration, 60 / this.tempo * this.smoothing );
+};
+
+// slide the note at <index> into the next note at the given time,
+// and apply staccato effect if needed
+Sequence.prototype.slide = function( index, when, cutoff ) {
+  var next = this.getNextNote( index ),
+    start = this.getSlideStartDelay( cutoff );
+  this.setFrequency( this.notes[ index ].frequency, when + start );
+  this.rampFrequency( next.frequency, when + cutoff );
+  return this;
+};
+
+// set frequency at time
+Sequence.prototype.setFrequency = function( freq, when ) {
+  this.osc.frequency.setValueAtTime( freq, when );
+  return this;
+};
+
+// ramp to frequency at time
+Sequence.prototype.rampFrequency = function( freq, when ) {
+  this.osc.frequency.linearRampToValueAtTime( freq, when );
+  return this;
+};
+
+// run through all notes in the sequence and schedule them
+Sequence.prototype.play = function( when ) {
+  when = typeof when === 'number' ? when : this.ac.currentTime;
+
+  this.createOscillator();
+  this.osc.start( when );
+
+  this.notes.forEach(function( note, i ) {
+    when = this.scheduleNote( i, when );
+  }.bind( this ));
+
+  this.osc.stop( when );
+  this.osc.onended = this.loop ? this.play.bind( this, when ) : null;
+
+  return this;
+};
+
+// stop playback, null out the oscillator, cancel parameter automation
+Sequence.prototype.stop = function() {
+  if ( this.osc ) {
+    this.osc.onended = null;
+    this.osc.stop( 0 );
+    this.osc.frequency.cancelScheduledValues( 0 );
+    this.osc = null;
+  }
+  return this;
+};
+
+typeof module !== 'undefined' && ( module.exports = Sequence );
+
+global.Note = Note;
+global.Sequence = Sequence;
+
+}( typeof window !== 'undefined' ? window : this ) );
+
+
+
+var ac, tempo = 24, volume = 0.08;
+
+if ( window.AudioContext || window.webkitAudioContext ) {
+ac = new ( window.AudioContext || window.webkitAudioContext )();
+}
+
+let main;
+let base;
+generateNotes()
+let bass = new Sequence( ac, tempo, base);
+let lead = new Sequence( ac, tempo, main);
+initMusic();
+
+
 let svg = document.querySelector("svg");
 let ship = svg.querySelector("#s");
 let radar = svg.querySelector("#r");
@@ -85,7 +300,7 @@ let general = [
 
 let specials = [
   {
-    p: "M588.101563,0.7734375 L0.4140625,227.507813 C428.669271,215.486979 631.809896,209.476563 609.835938,209.476563 C587.861979,209.476563 475.9375,139.908854 274.0625,0.7734375 L200.757813,335 L505.007813,83.484375 L133.984375,83.484375 L505.007813,302.859375 L588.101563,0.7734375 Z",
+    p: "55.203125 163.25 -0.1015625 119.460938 460.898438 130.214844 212.976563 191.398438 166.601563 33.2109375 430.695313 259.9375 361.695313 290.039062 337.304688 0.4921875",
     t: "Alien. Artifacts. Ancient. Debris. Alone. Incoperate tech. (Up arrow 4x)",
     s: rand(20, 100),
     h: getColor('00a7'),
@@ -130,24 +345,6 @@ let specials = [
   }
 ]
 
-let soundIndex = 0;
-const music = [
-    ['311.1'],
-    ['164.8'],
-    ['311.1'],
-    1,
-    ['1661', 'square', 0.01],
-    ['587.3', 'triangle'],
-    1,
-    1,
-    ['311.1'],
-    ['164.8'],
-    ['311.1'],
-    1,
-    ['1661', 'square', 0.01],
-    ['587.3', 'triangle'],
-  ];
-
 let setDirection = {
   '0':[0, -2],
   '30':[1, -2],
@@ -162,19 +359,16 @@ let setDirection = {
   '300':[-1, -1],
   '330':[-1, -2],
 }
-let AudioContext = window.AudioContext || window.webkitAudioContext;
-let context = new AudioContext();
+
 let o = null
 let g = null
 let tickCount = 0;
-let soundEnabled = false;
-let playTone;
-
 let interval;
+let soundEnabled = false;
 
 init();
 function init () {
-  soundButton.addEventListener('click', ()=>{soundEnabled = !soundEnabled}, false);
+  soundButton.addEventListener('click', ()=>{soundEnabled = !soundEnabled; soundEnabled ? play() : stop() }, false);
   document.addEventListener('keydown', keyHandling, false);
   genMaps();
   move;
@@ -185,11 +379,6 @@ function init () {
 
 function tick () {
   move();
-  if (soundEnabled && tickCount % 30 === 0) {
-    if (playTone && music[soundIndex] !== 1) sound(music[soundIndex][0], music[soundIndex][1] || undefined, music[soundIndex][2] || undefined);
-    soundIndex++;
-    if (!music[soundIndex]) {playTone = false; soundIndex = 0};
-  }
   tickCount++;
 }
 
@@ -219,6 +408,11 @@ function keyHandling (e) {
         positionY = rand(10, 4500);
         layoutBodies();
         text.textContent = '';
+      },
+      'p':()=>{
+        ftl = true;
+        longRangeScanners = "f";
+        gravityDrive = true;
       }
   }[e.key];
   callback && callback();
@@ -268,7 +462,7 @@ function move () {
 function layoutStars () {
   for (let i = 0; i < 1000; i++) {
     let circle = addElement(2);
-    circle.style.transform = 'translate('+Math.random()*5000+'px, '+Math.random()*5000+'px)'
+    circle.style.transform = 'translate('+getRandom()*5000+'px, '+getRandom()*5000+'px)'
   }
 }
 
@@ -306,18 +500,17 @@ function multipleObjects (node, obj) {
   let num = rand(1, 10);
   if (num > 10) num = 10;
   for (let i = 0; i < num; i++) {
-    let value = Math.random() * 0xFF | 0;
+    let value = getRandom() * 0xFF | 0;
     let grayscale = (value << 16) | (value << 8) | value;
     let color = '#' + grayscale.toString(16);
     let tmpNode = node.cloneNode(true);
-    tmpNode.style.transform = 'translate('+(obj.c[1] +(Math.random()*500))+'px, '+(obj.c[0]+(Math.random()*600))+'px) scale('+Math.random()+') rotate('+(Math.random()*360)+'deg)';
+    tmpNode.style.transform = 'translate('+(obj.c[1] +(getRandom()*500))+'px, '+(obj.c[0]+(getRandom()*600))+'px) scale('+getRandom()+') rotate('+(getRandom()*360)+'deg)';
     tmpNode.style.fill = '#' + grayscale.toString(16);
     objects.appendChild(tmpNode);
   }
 }
 
 function scan () {
-  if (soundEnabled) sound(261.6, 'sine', 0.1);
   radar.style.opacity = 0.8;
   setTimeout(()=>{radar.style.opacity = 0;}, 400)
   velocityX = 0;
@@ -375,12 +568,13 @@ function genMaps () {
         startPlanet.s = 200;
         startPlanet.c = [2100, 2225];
         startPlanet.h = "#18cef1";
+        startPlanet.w = "t";
         tmp.push(startPlanet);
       } else {
-        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
-        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
-        if (Math.random() > 0.5) tmp.push(generateSpaceObject());
-        if (Math.random() > 0.95) tmp.push(generateSpecial());
+        if (getRandom() > 0.5) tmp.push(generateSpaceObject());
+        if (getRandom() > 0.5) tmp.push(generateSpaceObject());
+        if (getRandom() > 0.5) tmp.push(generateSpaceObject());
+        if (getRandom() > 0.95) tmp.push(generateSpecial());
       }
 
       map[i].push(tmp);
@@ -388,41 +582,31 @@ function genMaps () {
   }
 }
 
+function getRandom () {
+  return Math.random();
+}
+
 function generateSpaceObject () {
-  return {...general[Math.floor(Math.random() * general.length)]};
+  return {...general[Math.floor(getRandom() * general.length)]};
 }
 
 function generateSpecial () {
-  return {...specials[Math.floor(Math.random() * specials.length)]};
+  return {...specials[Math.floor(getRandom() * specials.length)]};
 }
 
 function getColor (i) {
-  let color = (Math.random()*100000000).toString(16);
+  let color = (getRandom()*100000000).toString(16);
   return '#'+i+color.substring(0, 6 - i.length)
 }
 
 function rand (min, multiplier) {
-  let num = Math.floor(Math.random()* multiplier);
+  let num = Math.floor(getRandom()* multiplier);
   return num < min ? min : num;
-}
-
-function sound(frequency, type, gain, length) {
-  o = context.createOscillator()
-  g = context.createGain()
-  g.gain.value = gain || 0.05 // 10 %
-  o.type = type || 'triangle'
-  o.connect(g)
-  o.frequency.value = frequency
-  g.connect(context.destination)
-  o.start(0)
-
-  g.gain.exponentialRampToValueAtTime(
-    0.00001, context.currentTime + (length || 2)
-  )
 }
 
 function win (type) {
   clearInterval(interval);
+  svg.setAttribute('viewBox', (positionX-225)+' '+(positionY-225)+' 500 500');
   text.textContent = "";
   objects.style.opacity = 0;
   text.style.opacity = 0;
@@ -434,6 +618,9 @@ function win (type) {
   setTimeout(end, 4000);
 
   function end () {
+    setTimeout(() => {
+        stop();
+      }, 16000);
     let texts = svg.querySelectorAll(".e");
     let endText = [
       "You are probe. Welcome home. We sent you out when all hope had escaped us. ",
@@ -454,6 +641,75 @@ function win (type) {
       }, i*3000);
     }
   }
+}
+
+
+
+function generateNotes () {
+let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
+let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
+let tmpNotesArr = ['_  e','_  e','_  e','_  e'];
+let tmpBaseNotesArr = [...baseNotesArr, ...baseNotesArr,...baseNotesArr];
+for (let index = 0; index < 1000; index++) {
+  tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
+  tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
+}
+main = tmpNotesArr;
+base = tmpBaseNotesArr
+}
+
+function initMusic () {
+if ( ac ) {
+  let osc = ac.createOscillator();
+  let compressor = ac.createDynamicsCompressor();
+  let output = ac.createGain();
+  output.connect( ac.destination );
+  output.gain.value = volume;
+  let reverb = ac.createConvolver();
+  reverb.buffer = createReverb( 2 );
+  reverb.connect( compressor );
+  osc.frequency.value = 0;
+  osc.connect( compressor );
+  osc.start();
+  lead.wet.connect( reverb );
+  bass.dry.connect( compressor );
+  lead.dry.connect( compressor );
+
+  compressor.connect( output );
+  bass.waveType = 'sine';
+  bass.treble.type = 'lowpass';
+  lead.waveType = 'sine';
+}
+}
+
+function play () {
+let now;
+if ( ac ) {
+  now = ac.currentTime;
+  lead.play( now );
+  bass.play( now );
+}
+}
+
+function stop () {
+if ( ac ) {
+  lead.stop();
+  bass.stop();
+}
+}
+
+function createReverb ( ) {
+var sr = ac.sampleRate,
+  len = sr * 2,
+  impulse = ac.createBuffer( 2, len, sr ),
+  impulseL = impulse.getChannelData( 0 ),
+  impulseR = impulse.getChannelData( 1 ),
+  i = 0;
+for ( ; i < len; ++i ) {
+  impulseL[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
+  impulseR[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
+}
+return impulse;
 }
 
 </script>
