@@ -6,7 +6,7 @@
 <body>
 <svg style="width: 100%;max-height: 600px; background:#000822" width="5000px" height="5000px" viewBox="2000 2000 500 500" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <style>
-    #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}
+    #s {transform-origin: 20px 20px;}#r{opacity:0}.s{animation: s 400ms ease-out;}.e,#b {transition: opacity 2000ms ease-in-out;}@keyframes s {0%{opacity: 0;}100%{opacity:0.7}}
   </style>
   <defs>
     <filter id="f" x="0" y="0">
@@ -23,12 +23,15 @@
             <line x1="26.5" y1="0.5" x2="0.5" y2="35.5"></line>
             <line x1="26.5" y1="0.5" x2="52.5" y2="35.5"></line>
           </g>
-          <circle style="transform:translate(-100px, -100px)" id="r" fill="#C9EDFF" cx="125.5" cy="125.5" r="125.5"></circle>
+          <circle id="r" style="transform:translate(-100px, -100px)" fill="#C9EDFF" cx="125.5" cy="125.5" r="125.5"></circle>
       </g>
       <text style="transform:translate(2225px, 2225px)" x="-350" y="250" fill="#fff" font-family="Arial, sans-serif" id="t">Earth became dark. Scan for life, keep us alive in the minds of others. (Arrow keys to move/scan objects)</text>
 </svg>
 
 <script>
+
+// A mangled version of TinyMusic. A phenomenal music player!
+// https://github.com/kevincennis/TinyMusic
 (function( global ) {
 
 /*
@@ -49,17 +52,6 @@ enharmonics.split('|').forEach(function( val, i ) {
     offsets[ note ] = i;
   });
 });
-
-/*
- * Note class
- *
- * new Note ('A4 q') === 440Hz, quarter note
- * new Note ('- e') === 0Hz (basically a rest), eigth note
- * new Note ('A4 es') === 440Hz, dotted eighth note (eighth + sixteenth)
- * new Note ('A4 0.0125') === 440Hz, 32nd note (or any arbitrary
- * divisor/multiple of 1 beat)
- *
- */
 
 // create a new Note instance from a string
 function Note( str ) {
@@ -228,41 +220,7 @@ global.Sequence = Sequence;
 
 }( typeof window !== 'undefined' ? window : this ) );
 
-
-
-let ac;
-let tempo = 24;
-let volume = 0.08;
-
-if ( window.AudioContext || window.webkitAudioContext ) {
-ac = new ( window.AudioContext || window.webkitAudioContext )();
-}
-
-let main;
-let base;
-generateNotes()
-let bass = new Sequence( ac, tempo, base);
-let lead = new Sequence( ac, tempo, main);
-initMusic();
-
-
-let svg = document.querySelector("svg");
-let ship = svg.querySelector("#s");
-let radar = svg.querySelector("#r");
-let objects = svg.querySelector("#b");
-let soundButton = svg.querySelector("#m");
-let text = svg.querySelector("text");
-let degrees = 0;
-let vx = 0;
-let vy = 0;
-let px = 2225;
-let py = 2225;
-let map = [];
-let sector = [500, 500];
-let ftl;
-let gd;
-let lrs;
-
+// All non special general encounters
 let general = [
   {
     t: "None. Planet $. No intelligent life.",
@@ -300,6 +258,7 @@ let general = [
   },
 ]
 
+// All special encounters
 let specials = [
   {
     p: "55.203125 163.25 -0.1015625 119.460938 460.898438 130.214844 212.976563 191.398438 166.601563 33.2109375 430.695313 259.9375 361.695313 290.039062 337.304688 0.4921875",
@@ -347,7 +306,9 @@ let specials = [
   }
 ]
 
-let setDirection = {
+// Allows us to set direction and velocity in that direction
+// based on the probes degree of rotation
+let sdi = {
   '0':[0, -2],
   '30':[1, -2],
   '60':[2, -1],
@@ -362,12 +323,48 @@ let setDirection = {
   '330':[-1, -2],
 }
 
+// All stuff for setting up and playing music
+let ac; // audio context
+let tempo = 24;
+let volume = 0.08;
+
+if ( window.AudioContext || window.webkitAudioContext ) {
+ac = new ( window.AudioContext || window.webkitAudioContext )();
+}
+
+let main;
+let base;
+generateNotes()
+let bass = new Sequence( ac, tempo, base);
+let lead = new Sequence( ac, tempo, main);
+initMusic();
+let se = false; // Is sound one
+
+// All game global vars
+let svg = document.querySelector("svg");
+let ship = svg.querySelector("#s");
+let radar = svg.querySelector("#r");
+let objects = svg.querySelector("#b");
+let soundButton = svg.querySelector("#m");
+let text = svg.querySelector("text");
+let degrees = 0; // ship angle in degrees
+let vx = 0; // probe velocity x
+let vy = 0; // probe velocity y
+let px = 2225; // probe position x
+let py = 2225; // probe position y
+let map = [];
+let sector = [500, 500]; // current sector (starts in center)
+// These are special abilities:
+// warping, gravity drive, and long range scanners
+let ftl;
+let gd;
+let lrs;
+
 let o = null
 let g = null
-let tc = 0;
 let interval;
-let se = false;
 
+// initialize game and start event loop
 init();
 function init () {
   soundButton.addEventListener('click', ()=>{se = !se; se ? play() : stop() }, false);
@@ -381,9 +378,9 @@ function init () {
 
 function tick () {
   move();
-  tc++;
 }
 
+// Key event handling
 function keyHandling (e) {
   let callback = {
       'ArrowLeft':()=>{degrees -= 30},
@@ -393,11 +390,11 @@ function keyHandling (e) {
         if (gd &&
         Math.abs(vx) < 9 &&
         Math.abs(vy) < 9) {
-          vx += setDirection[str][0];
-          vy += setDirection[str][1];
+          vx += sdi[str][0];
+          vy += sdi[str][1];
         } else {
-          vx = setDirection[str][0];
-          vy = setDirection[str][1];
+          vx = sdi[str][0];
+          vy = sdi[str][1];
         }
       },
       'ArrowDown':scan,
@@ -420,6 +417,8 @@ function keyHandling (e) {
   callback && callback();
 }
 
+// Ever tick update the viewbox and probe position depending on py, xy, vy, xy, changing.
+// Also allows you to zoom out if you have found long range scanners.
 function move () {
   if (degrees === 360) degrees = 0;
   if (degrees < 0) degrees = 360 + degrees;
@@ -461,6 +460,7 @@ function move () {
   }
 }
 
+// Layout background stars on init
 function layoutStars () {
   for (let i = 0; i < 1000; i++) {
     let circle = addElement(2);
@@ -468,6 +468,7 @@ function layoutStars () {
   }
 }
 
+// Manages randomly placing objects on the map and giving them names
 function layoutBodies () {
   let bodies = objects.querySelectorAll(".c");
   for (let k = 0; k < bodies.length; k++) {
@@ -498,6 +499,7 @@ function layoutBodies () {
   }
 }
 
+// This is really just to randomly layout asteroids for asteroid fields
 function multipleObjects (node, obj) {
   let num = rand(1, 10);
   if (num > 10) num = 10;
@@ -512,9 +514,10 @@ function multipleObjects (node, obj) {
   }
 }
 
+// When you scan manages what you read from the object
 function scan () {
-  radar.style.opacity = 0.8;
-  setTimeout(()=>{radar.style.opacity = 0;}, 400)
+  radar.classList.remove("s");
+  setTimeout(()=>{radar.classList.add("s");}, 0)
   vx = 0;
   vy = 0;
   let sec = map[sector[0]][sector[1]];
@@ -546,6 +549,7 @@ function scan () {
   }
 }
 
+// Adds svg shape nodes for plenets, ships, asteroids, etc
 function addElement (size, color, points) {
   let newElement = document.createElementNS("http://www.w3.org/2000/svg", points ? "polygon" : "circle");
   if (points) {
@@ -560,6 +564,8 @@ function addElement (size, color, points) {
   return newElement;
 }
 
+// Generates all 1000 sectors on startup with a random assortment of
+// celestial bodies and special encounters
 function genMaps () {
   for (let i = 0; i < 1000; i++) {
     map.push([]);
@@ -606,6 +612,8 @@ function rand (min, multiplier) {
   return num < min ? min : num;
 }
 
+// Handles the end win sequences. There is one for when you go off
+// the map and a nother for when you find earth
 function win (type) {
   clearInterval(interval);
   svg.setAttribute('viewBox', (px-225)+' '+(py-225)+' 500 500');
@@ -645,8 +653,8 @@ function win (type) {
   }
 }
 
-
-
+// Much of this is pulled from this amazing JSK13 game (https://github.com/kevincennis/js13k).
+// I would never have known how to manage reverb without it!
 function generateNotes () {
 let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
 let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
