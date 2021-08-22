@@ -6,7 +6,7 @@
 <body>
 <svg style="width: 100%;max-height: 600px; background:#000822" width="5000px" height="5000px" viewBox="2000 2000 500 500" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <style>
-    #s {transform-origin: 20px 20px;}#r{opacity:0}.s{animation: s 400ms ease-out;}.e,#b {transition: opacity 2000ms ease-in-out;}@keyframes s {0%{opacity: 0;}100%{opacity:0.7}}
+    #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}
   </style>
   <defs>
     <filter id="f" x="0" y="0">
@@ -407,11 +407,6 @@ function keyHandling (e) {
         py = rand(10, 4500);
         layoutBodies();
         text.textContent = '';
-      },
-      'p':()=>{
-        ftl = true;
-        lrs = "f";
-        gd = true;
       }
   }[e.key];
   callback && callback();
@@ -516,8 +511,8 @@ function multipleObjects (node, obj) {
 
 // When you scan manages what you read from the object
 function scan () {
-  radar.classList.remove("s");
-  setTimeout(()=>{radar.classList.add("s");}, 0)
+  radar.style.opacity = 0.8;
+  setTimeout(()=>{radar.style.opacity = 0;}, 400)
   vx = 0;
   vy = 0;
   let sec = map[sector[0]][sector[1]];
@@ -575,8 +570,7 @@ function genMaps () {
         let startPlanet = {...general[0]};
         startPlanet.s = 200;
         startPlanet.c = [2100, 2225];
-        startPlanet.h = "#18cef1";
-        startPlanet.w = "t";
+        startPlanet.h = "#b08f27";
         tmp.push(startPlanet);
       } else {
         if (getRandom() > 0.5) tmp.push(generateSpaceObject());
