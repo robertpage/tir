@@ -653,7 +653,7 @@ function generateNotes () {
 let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
 let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
 let tmpNotesArr = ['_  e','_  e','_  e','_  e'];
-let tmpBaseNotesArr = [...baseNotesArr, ...baseNotesArr,...baseNotesArr];
+let tmpBaseNotesArr = [];
 for (let index = 0; index < 1000; index++) {
   tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
   tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
