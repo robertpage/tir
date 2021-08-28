@@ -105,7 +105,7 @@ function Sequence( ac, tempo, arr ) {
 
 // create gain and EQ nodes, then connect 'em
 Sequence.prototype.cfn = function() {
-  var eq = [ [ 'bass', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
+  var eq = [ [ 'ba', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
     prev = this.gain = this.ac.createGain();
   this.wet = this.ac.createGain();
   this.dry = this.ac.createGain();
@@ -335,8 +335,8 @@ ac = new ( window.AudioContext || window.webkitAudioContext )();
 let main;
 let base;
 generateNotes()
-let bass = new Sequence( ac, tempo, base);
-let lead = new Sequence( ac, tempo, main);
+let ba = new Sequence( ac, tempo, base);
+let ma = new Sequence( ac, tempo, main);
 initMusic();
 let se = false; // Is sound one
 
@@ -647,73 +647,53 @@ function win (type) {
   }
 }
 
-// Much of this is pulled from this amazing JSK13 game (https://github.com/kevincennis/js13k).
-// I would never have known how to manage reverb without it!
 function generateNotes () {
-let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
-let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
-let tmpNotesArr = ['_  e','_  e','_  e','_  e'];
-let tmpBaseNotesArr = [];
-for (let index = 0; index < 1000; index++) {
-  tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
-  tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
-}
-main = tmpNotesArr;
-base = tmpBaseNotesArr
+  let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
+  let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
+  let tmpNotesArr = ['_  e','_  e','_  e','_  e'];
+  let tmpBaseNotesArr = [];
+    for (let index = 0; index < 1000; index++) {
+      tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
+      tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
+    }
+  main = tmpNotesArr;
+  base = tmpBaseNotesArr
 }
 
 function initMusic () {
-if ( ac ) {
-  let osc = ac.createOscillator();
-  let compressor = ac.createDynamicsCompressor();
-  let output = ac.createGain();
-  output.connect( ac.destination );
-  output.gain.value = volume;
-  let reverb = ac.createConvolver();
-  reverb.buffer = createReverb( 2 );
-  reverb.connect( compressor );
-  osc.frequency.value = 0;
-  osc.connect( compressor );
-  osc.start();
-  lead.wet.connect( reverb );
-  bass.dry.connect( compressor );
-  lead.dry.connect( compressor );
+  if ( ac ) {
+    let osc = ac.createOscillator();
+    let compressor = ac.createDynamicsCompressor();
+    let op = ac.createGain();
+    op.connect( ac.destination );
+    op.gain.value = volume;
+    osc.frequency.value = 0;
+    osc.connect( compressor );
+    osc.start();
+    ba.dry.connect( compressor );
+    ma.dry.connect( compressor );
 
-  compressor.connect( output );
-  bass.waveType = 'sine';
-  bass.treble.type = 'lowpass';
-  lead.waveType = 'sine';
-}
+    compressor.connect( op );
+    ba.waveType = 'sine';
+    ba.treble.type = 'lowpass';
+    ma.waveType = 'sine';
+  }
 }
 
 function play () {
-let now;
-if ( ac ) {
-  now = ac.currentTime;
-  lead.play( now );
-  bass.play( now );
-}
+  let n;
+  if ( ac ) {
+    n = ac.currentTime;
+    ma.play( n );
+    ba.play( n );
+  }
 }
 
 function stop () {
-if ( ac ) {
-  lead.stop();
-  bass.stop();
-}
-}
-
-function createReverb ( ) {
-var sr = ac.sampleRate,
-  len = sr * 2,
-  impulse = ac.createBuffer( 2, len, sr ),
-  impulseL = impulse.getChannelData( 0 ),
-  impulseR = impulse.getChannelData( 1 ),
-  i = 0;
-for ( ; i < len; ++i ) {
-  impulseL[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
-  impulseR[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
-}
-return impulse;
+  if ( ac ) {
+    ma.stop();
+    ba.stop();
+  }
 }
 
 </script>
