@@ -197,7 +197,7 @@ let general = [
     t: "None. Planet $. No intelligent life.",
     s: rand(200, 500),
     h: getColor('f'),
-    n: "n"
+    n: "n",
   },
   {
     p: "168.445312 70.609375 0.140625 190.21875 64.5546875 249.554687 217.242187 287.96875 267.320312 202.179687 379.273437 144.320312 247.25 0.3984375 136.1875 23.15625",
@@ -236,38 +236,44 @@ let specials = [
     t: "Alien. Artifacts. Ancient. Debris. Alone. Incoperate tech. (Up arrow 4x)",
     s: rand(20, 100),
     h: getColor('00a7'),
-    u: "s"
+    u: "s",
+    v: 8
   },
   {
     P: "0.46875 72.4140625 383.25 0.28125 307.546875 172.695312",
     t: "Planet. Ancient. Civilization. Debris. Alone. Incoperate tech. ('S' key to toggle)",
     s: rand(200, 500),
     h: getColor('00bd'),
-    u: "r"
+    u: "r",
+    v: 8
   },
   {
     p: "241.34375 59.71875 -0.1015625 119.460938 212.976562 136.921875 212.976562 191.398437 271.257812 159.421875 430.695312 259.9375 347.992188 75.640625 337.304688 0.4921875",
     t: "Ship. Ancient. Debris. Alone. Incoperate tech. ('W' key to FTL)",
     s: rand(20, 100),
     h: getColor('00a7'),
-    u: "w"
+    u: "w",
+    v: 8
   },
   {
     p:"32.2890625 80.0625 177.3125 0.171875 302.828125 57.3125 351.289062 40.1171875 327.984375 122.078125 302.828125 80.0625 160.085938 111.429688 47.9921875 122.078125 -0.0546875 98.8984375", // ellipse
     t: "Whale. Moos. Friend.",
     s: rand(20, 100),
-    h: getColor('00bd')
+    h: getColor('00bd'),
+    v: 18
   },
   {
     t: "Probe. Sister. Debris. Alone.",
     s: 12,
-    h: getColor('D8D8D8')
+    h: getColor('D8D8D8'),
+    v: 18
   },
   {
     t: "We are ancient. We are friend. Journey on. Incoperate tech. ('W', 'S' keys)",
     s: rand(200, 500),
     h: getColor('000000'),
-    u: "a"
+    u: "a",
+    v: 8
   },
   {
     t: "",
@@ -322,6 +328,8 @@ let radar = svg.querySelector('#r');
 let objects = svg.querySelector('#b');
 let textWrapper = svg.querySelector('#tw');
 let texts = textWrapper.querySelectorAll('div');
+let score = 0;
+let discovered = [];
 let degrees = 0; // ship angle in degrees
 let vx = 0; // probe velocity x
 let vy = 0; // probe velocity y
@@ -499,7 +507,6 @@ function scan () {
   let sec = map[sector[0]][sector[1]];
   setText('Tir: Hello?');
   placeText(0);
-  // text.style.transform = 'translate('+px+'px, '+py+'px)';
   for (let i = 0; i < sec.length; i++) {
     if (Math.abs(px - (sec[i].c[1]+sec[i].s)) < 300 &&
     Math.abs(py - (sec[i].c[0]+sec[i].s)) < 300) {
@@ -519,8 +526,12 @@ function scan () {
         }
       }
       let responseText = sec[i].t;
-      if (sec[i].n) responseText = responseText.replace('$', sec[i].n)
-      setText('Tir: Hello? Response: '+ responseText);
+      if (sec[i].n) {
+        if (!discovered.includes(sec[i].n)) score += (sec[i].v ? sec[i].v : 1);
+        responseText = responseText.replace('$', sec[i].n);
+        discovered.push(sec[i].n);
+      }
+      setText('Tir: Hello? Response: '+ responseText + ' Score: '+ score );
       break;
     }
   }
@@ -596,6 +607,7 @@ function rand (min, multiplier) {
 // Handles the end win sequences. There is one for when you go off
 // the map and a nother for when you find earth
 function win (type) {
+  score += 300;
   clearInterval(interval);
   objects.style.opacity = 0;
   lrs = 'f';
@@ -624,7 +636,8 @@ function win (type) {
     ]
     for (let i = 0; i < texts.length; i++) {
       placeText();
-      texts[i].textContent = type === 'w' ? endText[i] : endText2[i];
+      let etext = (type === 'w' ? endText[i] : endText2[i]) + " " + (i === 2 ? "Score: "+score : "");
+      texts[i].textContent = etext;
       texts[i].style.opacity = 0;
       setTimeout(() => {
         texts[i].style.opacity = 1;
