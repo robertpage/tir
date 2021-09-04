@@ -13,7 +13,7 @@ Made to be self contained in a SVG andthen embeded via an object tag. The game r
 The earth has gone dark. A probe was sent out to find intelligent life and tell them our story so that we can live on in their memories.
 
 # Add the game to a site
-Change the path to the tir.svg data attribute and add it to a webpage.
+Change the path to the tir.svg data attribute and add it to a webpage. The width and height set in the style attribute can really be any size but the experience is best the larger it is.
 ```
 <object style="width:100%;height:calc(100vh - 20px)" type="image/svg+xml" data="tir.svg">Oops, something went wrong :-/</object>
 ```
