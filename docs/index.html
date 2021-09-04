@@ -4,18 +4,12 @@
 <meta charset="UTF-8" />
 </head>
 <body>
-<svg style="width: 100%;max-height: 600px; background:#000822" width="5000px" height="5000px" viewBox="2000 2000 500 500" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg style="width:100%;height:calc(100vh - 20px);background:#000822" width="5000px" height="5000px" viewBox="0 0 5000 5000" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <style>
-    #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}
+    #s {transform-origin: 20px 20px;}#r {opacity: 0;transition: all 400ms ease-in-out;}.e,#b {transition: opacity 2000ms ease-in-out;}#tw{color:#fff;font-family:'Arial', sans-serif}
   </style>
-  <defs>
-    <filter id="f" x="0" y="0">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="40" />
-    </filter>
-  </defs>
     <rect fill="#000822" x="0" y="0" width="5000" height="5000"></rect>
     <g id="b" style="opacity: 1"></g>
-      <polygon style="transform:translate(1825px, 2005px)" id="m" fill="#484850" points="0 5.4 5.5 5.4 11 0 11 18 5.5 12.6 0 12.6"></polygon>
       <g id="s">
           <g stroke="#979797">
             <circle fill="#D8D8D8" cx="26.5" cy="6.5" r="6"></circle>
@@ -25,200 +19,177 @@
           </g>
           <circle id="r" style="transform:translate(-100px, -100px)" fill="#C9EDFF" cx="125.5" cy="125.5" r="125.5"></circle>
       </g>
-      <text style="transform:translate(2225px, 2225px)" x="-350" y="250" fill="#fff" font-family="Arial, sans-serif" id="t">Earth became dark. Scan for life, keep us alive in the minds of others. (Arrow keys to move/scan objects)</text>
+      <foreignObject id="tw" x="2225" y="2225" width="350" height="60">
+          <div>
+            Earth became dark. Scan for life, keep us alive in the minds of others. (Arrow keys to move/scan objects. 'M' to toggle music.)
+          </div>
+          <div></div>
+          <div></div>
+      </foreignObject>
 </svg>
 
 <script>
-
-// A mangled version of TinyMusic. A phenomenal music player!
+// A thoroughly mangled version of TinyMusic. A phenomenal music player!
 // https://github.com/kevincennis/TinyMusic
-(function( global ) {
+let tm = (ac, tempo, arr) => {
+    let gain;
+    let SE = {}
+    let osc;
+    let enharmonics = 'B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb',
+    middleC = 440 * Math.pow( Math.pow( 2, 1 / 12 ), -9 ),
+    numeric = /^[0-9.]+$/,
+    octaveOffset = 4,
+    space = /\s+/,
+    num = /(\d+)/,
+    offsets = {};
 
-/*
- * Private stuffz
- */
+    // populate the offset lookup (note distance from C, in semitones)
+    enharmonics.split('|').forEach(function( val, i ) {
+        val.split('-').forEach(function( note ) {
+        offsets[ note ] = i;
+        });
+    });
 
-var enharmonics = 'B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb',
-  middleC = 440 * Math.pow( Math.pow( 2, 1 / 12 ), -9 ),
-  numeric = /^[0-9.]+$/,
-  octaveOffset = 4,
-  space = /\s+/,
-  num = /(\d+)/,
-  offsets = {};
+    let waveType = this.waveType || 'sine';
+    let trebleType = this.trebleType || 'lowpass';
+    SE.wet = ac.createGain();
+    SE.dry = ac.createGain();
 
-// populate the offset lookup (note distance from C, in semitones)
-enharmonics.split('|').forEach(function( val, i ) {
-  val.split('-').forEach(function( note ) {
-    offsets[ note ] = i;
-  });
-});
+    createFxNodes();
+    let loop = true;
+    let smoothing = 0;
+    let staccato = 0;
+    let notes = setNotes();
 
-// create a new Note instance from a string
-function Note( str ) {
-  var couple = str.split( space );
-  // frequency, in Hz
-  this.frequency = Note.gf( couple[ 0 ] ) || 0;
-  // duration, as a ratio of 1 beat (quarter note = 1, half note = 0.5, etc.)
-  this.duration = Note.gd( couple[ 1 ] ) || 0;
+    function Note( str ) {
+        let couple = str.split( space );
+        // frequency, in Hz
+        this.frequency = getFrequency( couple[ 0 ] ) || 0;
+        // duration, as a ratio of 1 beat (quarter note = 1, half note = 0.5, etc.)
+        this.duration = getDuration( couple[ 1 ] ) || 0;
+    }
+
+    function getFrequency ( name ) {
+        let couple = name.split( num ),
+          distance = offsets[ couple[ 0 ] ],
+          octaveDiff = ( couple[ 1 ] || octaveOffset ) - octaveOffset,
+          freq = middleC * Math.pow( Math.pow( 2, 1 / 12 ), distance );
+        return freq * Math.pow( 2, octaveDiff );
+    };
+
+    function getDuration ( symbol ) {
+    return numeric.test( symbol ) ? parseFloat( symbol ) :
+        symbol.toLowerCase().split('').reduce(function( prev, curr ) {
+        return prev + ( curr === 'w' ? 4 : curr === 'h' ? 2 :
+            curr === 'q' ? 1 : curr === 'e' ? 0.5 :
+            curr === 's' ? 0.25 : 0 );
+        }, 0 );
+    };
+
+    // create gain and EQ nodes, then connect 'em
+    function createFxNodes () {
+        let eq = [ [ 'bass', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
+        prev = gain = ac.createGain();
+        eq.forEach(function( config, filter ) {
+        filter = this[ config[ 0 ] ] = ac.createBiquadFilter();
+        filter.type = trebleType;
+        filter.frequency.value = config[ 1 ];
+        prev.connect( prev = filter );
+        }.bind( this ));
+        prev.connect( SE.wet );
+        prev.connect( SE.dry );
+    };
+
+    // accepts Note instances or strings (e.g. 'A4 e')
+    function setNotes () {
+      let tmp = [];
+      for (let i = 0; i < arr.length; i++) {
+        tmp.push( arr[i] instanceof Note ? arr[i] : new Note( arr[i] ) );
+      }
+      return tmp;
+    };
+
+    // recreate the oscillator node (happens on every play)
+    function co () {
+        stop();
+        osc = ac.createOscillator();
+        osc.type = waveType;
+        osc.connect( gain );
+    };
+
+    // schedules this.notes[ index ] to play at the given time
+    // returns an AudioContext timestamp of when the note will *end*
+    function scheduleNote ( index, when ) {
+        let duration = 60 / tempo * notes[ index ].duration,
+        cutoff = duration * ( 1 - ( staccato || 0.00000000001 ) );
+
+        sf( notes[ index ].frequency, when );
+
+        if ( smoothing && notes[ index ].frequency ) {
+          slide( index, when, cutoff );
+        }
+
+        sf( 0, when + cutoff );
+        return when + duration;
+    };
+
+    // get the next note
+    function getNextNote ( index ) {
+        return notes[ index < notes.length - 1 ? index + 1 : 0 ];
+    };
+
+    // how long do we wait before beginning the slide? (in seconds)
+    function getSlideStartDelay ( duration ) {
+        return duration - Math.min( duration, 60 / tempo * smoothing );
+    };
+
+    // slide the note at <index> into the next note at the given time,
+    // and apply staccato effect if needed
+    function slide ( index, when, cutoff ) {
+        let next = getNextNote( index ),
+        start = getSlideStartDelay( cutoff );
+        sf( notes[ index ].frequency, when + start );
+        rampFrequency( next.frequency, when + cutoff );
+    };
+
+    // set frequency at time
+    function sf ( freq, when ) {
+        osc.frequency.setValueAtTime( freq, when );
+    };
+
+    // ramp to frequency at time
+    function rampFrequency ( freq, when ) {
+        osc.frequency.linearRampToValueAtTime( freq, when );
+    };
+
+    // run through all notes in the sequence and schedule them
+    SE.play = ( when ) => {
+      // console.log(notes)
+        when = typeof when === 'number' ? when : ac.currentTime;
+
+        co();
+        osc.start( when );
+
+        notes.forEach(function ( note, i ) {
+        when = scheduleNote( i, when );
+        }.bind( this ));
+
+        osc.stop( when );
+        osc.onended = loop ? SE.play.bind( this, when ) : null;
+    };
+
+    // stop playback, null out the oscillator, cancel parameter automation
+    SE.stop = () => {
+        if ( osc ) {
+        osc.onended = null;
+        osc.stop( 0 );
+        osc.frequency.cancelScheduledValues( 0 );
+        osc = null;
+        }
+    };
+
+    return SE;
 }
-
-// convert a note name (e.g. 'A4') to a frequency (e.g. 440.00)
-Note.gf = function( name ) {
-  var couple = name.split( num ),
-    distance = offsets[ couple[ 0 ] ],
-    octaveDiff = ( couple[ 1 ] || octaveOffset ) - octaveOffset,
-    freq = middleC * Math.pow( Math.pow( 2, 1 / 12 ), distance );
-  return freq * Math.pow( 2, octaveDiff );
-};
-
-// convert a duration string (e.g. 'q') to a number (e.g. 1)
-// also accepts numeric strings (e.g '0.125')
-// and compund durations (e.g. 'es' for dotted-eight or eighth plus sixteenth)
-Note.gd = function( symbol ) {
-  return numeric.test( symbol ) ? parseFloat( symbol ) :
-    symbol.toLowerCase().split('').reduce(function( prev, curr ) {
-      return prev + ( curr === 'w' ? 4 : curr === 'h' ? 2 :
-        curr === 'q' ? 1 : curr === 'e' ? 0.5 :
-        curr === 's' ? 0.25 : 0 );
-    }, 0 );
-};
-
-typeof module !== 'undefined' && ( module.exports = Note );
-
-/*
- * Sequence class
- */
-
-// create a new Sequence
-function Sequence( ac, tempo, arr ) {
-  if ( ac ) {
-    this.ac = ac;
-    this.cfn();
-    this.tempo = tempo || 120;
-    this.loop = true;
-    this.smoothing = 0;
-    this.staccato = 0;
-    this.notes = [];
-    this.push.apply( this, arr || [] );
-  }
-}
-
-// create gain and EQ nodes, then connect 'em
-Sequence.prototype.cfn = function() {
-  var eq = [ [ 'bass', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
-    prev = this.gain = this.ac.createGain();
-  this.wet = this.ac.createGain();
-  this.dry = this.ac.createGain();
-  eq.forEach(function( config, filter ) {
-    filter = this[ config[ 0 ] ] = this.ac.createBiquadFilter();
-    filter.type = 'peaking';
-    filter.frequency.value = config[ 1 ];
-    prev.connect( prev = filter );
-  }.bind( this ));
-  prev.connect( this.wet );
-  prev.connect( this.dry );
-  return this;
-};
-
-// accepts Note instances or strings (e.g. 'A4 e')
-Sequence.prototype.push = function() {
-  Array.prototype.forEach.call( arguments, function( note ) {
-    this.notes.push( note instanceof Note ? note : new Note( note ) );
-  }.bind( this ));
-  return this;
-};
-
-// recreate the oscillator node (happens on every play)
-Sequence.prototype.createOscillator = function() {
-  this.stop();
-  this.osc = this.ac.createOscillator();
-  this.osc.type = this.waveType || 'square';
-  this.osc.connect( this.gain );
-  return this;
-};
-
-// schedules this.notes[ index ] to play at the given time
-// returns an AudioContext timestamp of when the note will *end*
-Sequence.prototype.scn = function( index, when ) {
-  var duration = 60 / this.tempo * this.notes[ index ].duration,
-    cutoff = duration * ( 1 - ( this.staccato || 0.00000000001 ) );
-
-  this.sf( this.notes[ index ].frequency, when );
-
-  if ( this.smoothing && this.notes[ index ].frequency ) {
-    this.slide( index, when, cutoff );
-  }
-
-  this.sf( 0, when + cutoff );
-  return when + duration;
-};
-
-// get the next note
-Sequence.prototype.gnn = function( index ) {
-  return this.notes[ index < this.notes.length - 1 ? index + 1 : 0 ];
-};
-
-// how long do we wait before beginning the slide? (in seconds)
-Sequence.prototype.gssd = function( duration ) {
-  return duration - Math.min( duration, 60 / this.tempo * this.smoothing );
-};
-
-// slide the note at <index> into the next note at the given time,
-// and apply staccato effect if needed
-Sequence.prototype.slide = function( index, when, cutoff ) {
-  var next = this.gnn( index ),
-    start = this.gssd( cutoff );
-  this.sf( this.notes[ index ].frequency, when + start );
-  this.rf( next.frequency, when + cutoff );
-  return this;
-};
-
-// set frequency at time
-Sequence.prototype.sf = function( freq, when ) {
-  this.osc.frequency.setValueAtTime( freq, when );
-  return this;
-};
-
-// ramp to frequency at time
-Sequence.prototype.rf = function( freq, when ) {
-  this.osc.frequency.linearRampToValueAtTime( freq, when );
-  return this;
-};
-
-// run through all notes in the sequence and schedule them
-Sequence.prototype.play = function( when ) {
-  when = typeof when === 'number' ? when : this.ac.currentTime;
-
-  this.createOscillator();
-  this.osc.start( when );
-
-  this.notes.forEach(function( note, i ) {
-    when = this.scn( i, when );
-  }.bind( this ));
-
-  this.osc.stop( when );
-  this.osc.onended = this.loop ? this.play.bind( this, when ) : null;
-
-  return this;
-};
-
-// stop playback, null out the oscillator, cancel parameter automation
-Sequence.prototype.stop = function() {
-  if ( this.osc ) {
-    this.osc.onended = null;
-    this.osc.stop( 0 );
-    this.osc.frequency.cancelScheduledValues( 0 );
-    this.osc = null;
-  }
-  return this;
-};
-
-typeof module !== 'undefined' && ( module.exports = Sequence );
-
-global.Note = Note;
-global.Sequence = Sequence;
-
-}( typeof window !== 'undefined' ? window : this ) );
 
 // All non special general encounters
 let general = [
@@ -335,18 +306,22 @@ ac = new ( window.AudioContext || window.webkitAudioContext )();
 let main;
 let base;
 generateNotes()
-let bass = new Sequence( ac, tempo, base);
-let lead = new Sequence( ac, tempo, main);
+let ba = {...tm( ac, tempo, base)};
+let ma = {...tm( ac, tempo, main)};
 initMusic();
 let se = false; // Is sound one
 
-// All game global vars
-let svg = document.querySelector("svg");
-let ship = svg.querySelector("#s");
-let radar = svg.querySelector("#r");
-let objects = svg.querySelector("#b");
-let soundButton = svg.querySelector("#m");
-let text = svg.querySelector("text");
+// All game global lets
+let width = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
+let height = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
+let hWidth = width/2;
+let hHeight = height/2;
+let svg = document.querySelector('svg');
+let ship = svg.querySelector('#s');
+let radar = svg.querySelector('#r');
+let objects = svg.querySelector('#b');
+let textWrapper = svg.querySelector('#tw');
+let texts = textWrapper.querySelectorAll('div');
 let degrees = 0; // ship angle in degrees
 let vx = 0; // probe velocity x
 let vy = 0; // probe velocity y
@@ -367,10 +342,11 @@ let interval;
 // initialize game and start event loop
 init();
 function init () {
-  soundButton.addEventListener('click', ()=>{se = !se; se ? play() : stop() }, false);
   document.addEventListener('keydown', keyHandling, false);
   genMaps();
   move;
+  textWrapper.setAttribute('width', width);
+  placeText(0);
   layoutStars();
   layoutBodies();
   interval = setInterval(tick, 10);
@@ -406,8 +382,9 @@ function keyHandling (e) {
         px = rand(10, 4500);
         py = rand(10, 4500);
         layoutBodies();
-        text.textContent = '';
-      }
+        setText('')
+      },
+      'm':()=>{se = !se; se ? playMusic() : stopMusic() }
   }[e.key];
   callback && callback();
 }
@@ -421,37 +398,41 @@ function move () {
   if (px + vx > 5000) {
     sector[1] += 1;
     layoutBodies();
-    text.textContent = '';
+    setText('')
     px = 0;
   }
   if (px + vx < 0) {
     sector[1] -= 1;
     layoutBodies();
-    text.textContent = '';
+    setText('')
     px = 5000;
   }
 
   if (py + vy > 5000) {
     sector[0] += 1;
     layoutBodies();
-    text.textContent = '';
+    setText('')
     py = 0;
   }
   if (py + vy < 0) {
     sector[0] -= 1;
     layoutBodies();
-    text.textContent = '';
+    setText('')
     py = 5000;
   }
 
   px += vx;
   py += vy;
   ship.style.transform = 'translate('+px+'px, '+py+'px) rotate('+degrees+'deg)';
-  soundButton.style.transform = 'translate('+(px - 400)+'px, '+(py - 220)+'px)';
+  setView()
+
+}
+
+function setView () {
   if (lrs && lrs === "t") {
     svg.setAttribute('viewBox', '0 0 5000 5000');
   } else {
-    svg.setAttribute('viewBox', (px-225)+' '+(py-225)+' 500 500');
+    svg.setAttribute('viewBox', (px-hWidth)+' '+(py-hHeight)+' '+width+' '+height);
   }
 }
 
@@ -516,8 +497,9 @@ function scan () {
   vx = 0;
   vy = 0;
   let sec = map[sector[0]][sector[1]];
-  text.textContent = "Tir: Hello?";
-  text.style.transform = 'translate('+px+'px, '+py+'px)';
+  setText('Tir: Hello?');
+  placeText(0);
+  // text.style.transform = 'translate('+px+'px, '+py+'px)';
   for (let i = 0; i < sec.length; i++) {
     if (Math.abs(px - (sec[i].c[1]+sec[i].s)) < 300 &&
     Math.abs(py - (sec[i].c[0]+sec[i].s)) < 300) {
@@ -538,10 +520,15 @@ function scan () {
       }
       let responseText = sec[i].t;
       if (sec[i].n) responseText = responseText.replace('$', sec[i].n)
-      text.textContent = "Tir: Hello? Response: "+ responseText;
+      setText('Tir: Hello? Response: '+ responseText);
       break;
     }
   }
+}
+
+function placeText () {
+  textWrapper.setAttribute('x', px - (hWidth - 20));
+  textWrapper.setAttribute('y', py + (hHeight - 70));
 }
 
 // Adds svg shape nodes for plenets, ships, asteroids, etc
@@ -610,22 +597,21 @@ function rand (min, multiplier) {
 // the map and a nother for when you find earth
 function win (type) {
   clearInterval(interval);
-  svg.setAttribute('viewBox', (px-225)+' '+(py-225)+' 500 500');
-  text.textContent = "";
   objects.style.opacity = 0;
-  text.style.opacity = 0;
-  text.classList.add('e');
-  let lowerText = text.cloneNode(true);
-  let lowestText = text.cloneNode(true);
-  svg.appendChild(lowerText);
-  svg.appendChild(lowestText);
+  lrs = 'f';
+  setView();
+  setText('');
+  for (let j = 0; j < texts.length; j++) {
+    texts[j].style.opacity = 0;
+    texts[j].classList.add('e');
+  }
+
   setTimeout(end, 4000);
 
   function end () {
     setTimeout(() => {
         stop();
       }, 16000);
-    let texts = svg.querySelectorAll(".e");
     let endText = [
       "You are probe. Welcome home. We sent you out when all hope had escaped us. ",
       "You were to tell others of our story, so not all was lost. You have done well. ",
@@ -637,7 +623,7 @@ function win (type) {
       "You have done well. We will honor you and your journey. Together."
     ]
     for (let i = 0; i < texts.length; i++) {
-      texts[i].style.transform = 'translate('+px+'px, '+(py - ((3 - i)*50))+'px)';
+      placeText();
       texts[i].textContent = type === 'w' ? endText[i] : endText2[i];
       texts[i].style.opacity = 0;
       setTimeout(() => {
@@ -647,73 +633,52 @@ function win (type) {
   }
 }
 
-// Much of this is pulled from this amazing JSK13 game (https://github.com/kevincennis/js13k).
-// I would never have known how to manage reverb without it!
+// Randomly generate music
 function generateNotes () {
-let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
-let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','G5 e','B4 e','G5 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
-let tmpNotesArr = ['_  e','_  e','_  e','_  e'];
-let tmpBaseNotesArr = [];
-for (let index = 0; index < 1000; index++) {
-  tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
-  tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
-}
-main = tmpNotesArr;
-base = tmpBaseNotesArr
+  let notesArr = ['_  e','E4 q','F#4 e','D4 q','B3 e','G4 q','E4 e','B4 h','A4 q','A4 e','A4 q','G4  e','F#4 e','E4 e'];
+  let baseNotesArr = ['D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','D e','G4 e','G4 e','G4 e','G4 e','B4 e','B4 e','B4 e','B4 e','B4 e','G4 e','G4 e','D e','C4 e','C5 q','D5 q','C4 3'];
+  let tmpNotesArr = ['_  e','_  e','_  e','_  e',];
+  let tmpBaseNotesArr = [];
+  for (let index = 0; index < 1000; index++) {
+    tmpNotesArr.push(notesArr[Math.floor(getRandom() * notesArr.length)]);
+    tmpBaseNotesArr.push(baseNotesArr[Math.floor(getRandom() * baseNotesArr.length)]);
+  }
+  main = tmpNotesArr;
+  base = tmpBaseNotesArr
 }
 
 function initMusic () {
-if ( ac ) {
   let osc = ac.createOscillator();
-  let compressor = ac.createDynamicsCompressor();
-  let output = ac.createGain();
-  output.connect( ac.destination );
-  output.gain.value = volume;
-  let reverb = ac.createConvolver();
-  reverb.buffer = createReverb( 2 );
-  reverb.connect( compressor );
+  let comp = ac.createDynamicsCompressor();
+  let op = ac.createGain();
+  op.connect( ac.destination );
+  op.gain.value = volume;
   osc.frequency.value = 0;
-  osc.connect( compressor );
+  osc.connect( comp );
   osc.start();
-  lead.wet.connect( reverb );
-  bass.dry.connect( compressor );
-  lead.dry.connect( compressor );
-
-  compressor.connect( output );
-  bass.waveType = 'sine';
-  bass.treble.type = 'lowpass';
-  lead.waveType = 'sine';
-}
+  ba.dry.connect( comp );
+  ma.dry.connect( comp );
+  comp.connect( op );
 }
 
-function play () {
-let now;
-if ( ac ) {
-  now = ac.currentTime;
-  lead.play( now );
-  bass.play( now );
-}
-}
-
-function stop () {
-if ( ac ) {
-  lead.stop();
-  bass.stop();
-}
+function playMusic () {
+  let n;
+  if ( ac ) {
+    n = ac.currentTime;
+    ma.play( n );
+    ba.play( n );
+  }
 }
 
-function createReverb ( ) {
-var sr = ac.sampleRate,
-  len = sr * 2,
-  impulse = ac.createBuffer( 2, len, sr ),
-  impulseL = impulse.getChannelData( 0 ),
-  impulseR = impulse.getChannelData( 1 ),
-  i = 0;
-for ( ; i < len; ++i ) {
-  impulseL[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
-  impulseR[ i ] = ( getRandom() * 2 - 1 ) * Math.pow( 1 - i / len, 2.0 );
+function stopMusic () {
+  if ( ac ) {
+    ma.stop();
+    ba.stop();
+  }
 }
-return impulse;
+
+function setText(string) {
+  texts[0].textContent = string;
 }
 
 </script>
