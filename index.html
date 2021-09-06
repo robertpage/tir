@@ -200,6 +200,13 @@ let general = [
     n: "n",
   },
   {
+    t: "None. Planet $. No intelligent life.",
+    s: rand(200, 500),
+    h: getColor('f'),
+    n: "n",
+    r: 't'
+  },
+  {
     p: "168.445312 70.609375 0.140625 190.21875 64.5546875 249.554687 217.242187 287.96875 267.320312 202.179687 379.273437 144.320312 247.25 0.3984375 136.1875 23.15625",
     t: "None. Asteroid $. No intelligent life.",
     s: rand(20, 200),
@@ -448,7 +455,7 @@ function setView () {
 function layoutStars () {
   for (let i = 0; i < 1000; i++) {
     let circle = addElement(2);
-    circle.style.transform = 'translate('+getRandom()*5000+'px, '+getRandom()*5000+'px)'
+    circle[0].style.transform = 'translate('+getRandom()*5000+'px, '+getRandom()*5000+'px)'
   }
 }
 
@@ -466,17 +473,20 @@ function layoutBodies () {
   let sec = map[sector[0]][sector[1]];
   if (sec.length > 0) {
     for (let j = 0; j < sec.length; j++) {
-      let node = addElement(Math.floor(sec[j].s), sec[j].h, sec[j].p || undefined);
-      node.classList.add("c");
+      let node = addElement(Math.floor(sec[j].s), sec[j].h, sec[j].p || undefined, sec[j].r);
       if (!sec[j].c) {
         sec[j].c = [];
-        sec[j].c[0] = rand(0, 5000);
-        sec[j].c[1] = rand(0, 5000);
+        let xRand = rand(0, 5000);
+        let yRand = rand(0, 5000);
+        let diameter = sec[j].s * 4;
+        sec[j].c[0] = (yRand + diameter) > 5000 ? (yRand - diameter) : (yRand - diameter) < 0 ? diameter : yRand;
+        sec[j].c[1] = (xRand + diameter) > 5000 ? (xRand - diameter) : (xRand - diameter) < 0 ? diameter : xRand;
       }
       if (sec[j].n) sec[j].n = (sector[1] +""+ sec[j].c[1] +""+ sector[0]) + sec[j].h.replace("#", "-");
-      node.style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)'
+      node[0].style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)';
+      if (node[1]) node[1].style.transform = 'translate('+sec[j].c[1]+'px, '+sec[j].c[0]+'px)';
       if (sec[j].m) {
-        multipleObjects(node, sec[j]);
+        multipleObjects(node[0], sec[j]);
         return;
       }
     }
@@ -508,8 +518,8 @@ function scan () {
   setText('Tir: Hello?');
   placeText(0);
   for (let i = 0; i < sec.length; i++) {
-    if (Math.abs(px - (sec[i].c[1]+sec[i].s)) < 300 &&
-    Math.abs(py - (sec[i].c[0]+sec[i].s)) < 300) {
+    if (Math.abs(px - (sec[i].c[1])) < 300 &&
+    Math.abs(py - (sec[i].c[0])) < 300) {
       playTone = true;
       if (sec[i].w) {
         win('w');
@@ -543,18 +553,37 @@ function placeText () {
 }
 
 // Adds svg shape nodes for plenets, ships, asteroids, etc
-function addElement (size, color, points) {
-  let newElement = document.createElementNS("http://www.w3.org/2000/svg", points ? "polygon" : "circle");
-  if (points) {
-    newElement.setAttribute("points",points);
-  } else {
-    newElement.setAttribute("cx",size);
-    newElement.setAttribute("cy",size);
-    newElement.setAttribute("r",size/2);
+function addElement (size, color, points, hasRing) {
+  let elm = createElement();
+  let ring;
+  if (hasRing) {
+    ring = createElement(true);
+    ring.setAttribute("fill",color || '#fff');
+    ring.classList.add("c");
+    objects.appendChild(ring);
   }
-  newElement.setAttribute("fill",color || '#fff');
-  objects.appendChild(newElement);
-  return newElement;
+
+  elm.setAttribute("fill",color || '#fff');
+  if (color) elm.classList.add("c");
+  objects.appendChild(elm);
+  let tmp = [];
+  tmp.push(elm);
+  if (ring) tmp.push(ring);
+  return tmp;
+
+  function createElement (isRing) {
+    let newElement = document.createElementNS("http://www.w3.org/2000/svg", isRing ? 'ellipse' : points ? "polygon" : "circle");
+    if (points) {
+      newElement.setAttribute("points",points);
+    } else {
+      newElement.setAttribute("cx",0);
+      newElement.setAttribute("cy",0);
+      if (isRing) newElement.setAttribute("rx",size);
+      if (isRing) newElement.setAttribute("ry",size/8);
+      newElement.setAttribute("r",size/2);
+    }
+    return newElement;
+  }
 }
 
 // Generates all 1000 sectors on startup with a random assortment of
@@ -567,7 +596,7 @@ function genMaps () {
       if (i === 500 && j === 500) {
         let startPlanet = {...general[0]};
         startPlanet.s = 200;
-        startPlanet.c = [2100, 2225];
+        startPlanet.c = [2200, 2425];
         startPlanet.h = "#b08f27";
         tmp.push(startPlanet);
       } else {
