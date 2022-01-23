@@ -1,8 +1,8 @@
-![Start screen for game](https://robertpage.github.io/tir/screenshot.png)
+![Start screen for game](https://vivianeasley.github.io/tir/screenshot.png)
 
 # Tir
 
-## [PLAY](https://robertpage.github.io/tir/)
+## [PLAY](https://vivianeasley.github.io/tir/)
 
 My entry for jsk13 2021. Explore the vastness of space as a probe trying to spread the knowledge of a lost earth. A game about patience, and loneliness.
 
